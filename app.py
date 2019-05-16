@@ -73,24 +73,16 @@ class key_value(Resource):
 
 class Views(Resource):
     def get(self):
-        if request.access_route:
-            return make_response(jsonify(message='access_route:{}'.format(request.access_route[0])))
-        return make_response(jsonify(message='no access_route??! how tf did i get here?'))
-        #first send a request to all replicas and see if they are down?
-        #how do i know which address is it being sent to first?
-        # can i grab the `<replica-socket-address>` somehow?
-        #--> do this by accessing request object --> get ip address
+    	if request.host == '127.0.0.1:8082':
+    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[0]))
+    	elif request.host == '127.0.0.1:8083':
+    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[1]))
+    	else:
+    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[2]))
 
-        #READ FLASK QUICK START or how to 
 
-    def contactReplicas(self, address, key):
-        str_address = "http://" + address + "/key-value-store-view" + key
-        try:
-            json = request.json()
-            r = requests.get(str_address, json=json)
-            return r.json(), r.status_code
-        except:
-            return make_response(jsonify(error="Replica error", message="Replica " + ip + "error"))
+        
+
 
 
 
