@@ -1,3 +1,5 @@
+
+
 from flask import Flask, jsonify, request, make_response, g
 from flask_restful import Api, Resource
 
@@ -7,6 +9,7 @@ app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
+replica_ips = ["10.10.0.2:8080", "10.10.0.3:8080", "10.10.0.4.8080"]
 
 class key_value(Resource):
     def get(self, key):
@@ -66,7 +69,34 @@ class key_value(Resource):
             else:
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
+
+
+class Views(Resource):
+    def get(self):
+        if request.access_route:
+            return make_response(jsonify(message='access_route:{}'.format(request.access_route[0])))
+        return make_response(jsonify(message='no access_route??! how tf did i get here?'))
+        #first send a request to all replicas and see if they are down?
+        #how do i know which address is it being sent to first?
+        # can i grab the `<replica-socket-address>` somehow?
+        #--> do this by accessing request object --> get ip address
+
+        #READ FLASK QUICK START or how to 
+
+    def contactReplicas(self, address, key):
+        str_address = "http://" + address + "/key-value-store-view" + key
+        try:
+            json = request.json()
+            r = requests.get(str_address, json=json)
+            return r.json(), r.status_code
+        except:
+            return make_response(jsonify(error="Replica error", message="Replica " + ip + "error"))
+
+
+
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
+api.add_resource(Views, '/key-value-store-view')
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
