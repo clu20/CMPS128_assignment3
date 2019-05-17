@@ -1,0 +1,22 @@
+VIEW operations -- replica to replica only
+  GET (get_view)
+    returns all in <VIEW>
+  DELETE
+    if replica cannot connect to SOCKET, deletes SOCKET ip from VIEW (if its in the view),
+     send delete to other processes in VIEW
+  PUT
+    if SOCKET is in VIEW send error message, otherwise add SOCKET ip to VIEW,
+     and send PUT requests to all other ip's in VIEW
+KEY_VALUE operations -- client to replica and replica to replica
+  GET_ALL
+    Returns all keys (and their current values)
+  GET
+    Get a specific key
+  DELETE
+    for ip's in VIEW?
+      given that key is in dict, remove a key and add the version to a list hashed to key?
+  PUT
+    for ip's in VIEW?
+      given that key is NOT in dict, add a key and add the version to a list hashed to key?
+
+MECHANISM -- for every write request, loop through all sockets and send the corresponding write to all
