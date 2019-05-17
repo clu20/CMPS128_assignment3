@@ -1,0 +1,13 @@
+To test if our system works:
+
+1. make 3 instances, all in the same view, with different socket ip's
+2. send a PUT to one machine (all should get it)
+3. stop 1 container, and send PUT to one of the two running replicas
+    The replica receiving the PUT should forward it to both other replicas in VIEW
+    Both running replicas have 2 PUTs, and should recognize that one Replica is down
+4. after a timeout the Running replicas delete the downed ip from the VIEW
+5. client sends a "GET_VIEW" , should only have 2 socket addresses
+6. Next add another replica to VIEW
+7. Added replica will update the VIEW of all ip's in its (correctly)updated VIEW,
+    and ask for the current key-value-store
+8. Client sends a GET_ALL to added replica, it should have both previous PUTs

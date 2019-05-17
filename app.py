@@ -5,10 +5,23 @@ import os, requests
 
 app = Flask(__name__)
 api = Api(app)
-forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
+socket = os.environ.get('SOCKET_ADDRESS') or 0 ## socket ip
+view = os.environ.get_json('VIEW') or 0 ##  ip addresses in view
 newdict = {}
 
+class view(Resource):
+    # contains view operations (functions)----GET, DELETE, PUT
+    # operations are from replica to replica (ie. socket in view)
+    #GET: return all ip's in view currently
+    #DELETE: if socket is in view, remove from current process, send DELETE message to all ips in VIEW
+    #       if not, send error message
+    #PUT: if socket is already in view, send message: already in view
+    #       if not, add socket ip to view, send PUT message to all ips in view except socket's
+api.add_resource(socket, view, '/key-value-store-view/') ## not sure what should go here
+
+
 class key_value(Resource):
+    #operations are open to clients and replicas
     def get(self, key):
         if 'FORWARDING_ADDRESS' in os.environ:
             #nonempty forwarding address forward to main instance
@@ -27,7 +40,9 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in GET"), 404)
 
     def put(self, key):
-        if 'FORWARDING_ADDRESS' in os.environ:
+        # for ip in view ....
+        # Then add response to a list hashed to the key? -- we can have "value ie.(key_value)" and "version, (incremented per write)"
+        if 'FORWARDING_ADDRESS' in os.environ:# unnecessary
             try:
                 json = request.get_json()
                 r = requests.put('http://10.10.0.2:8080/key-value-store/'+key, json=json)
@@ -54,7 +69,9 @@ class key_value(Resource):
 
 
     def delete(self, key):
-        if 'FORWARDING_ADDRESS' in os.environ:
+        # for ip in view ....
+        # Then add response to a list hashed to the key? -- we can have "value(key_value)" and "version(incremented per write)"
+        if 'FORWARDING_ADDRESS' in os.environ: ## unnecessary
             try:
                 r = requests.delete('http://10.10.0.2:8080/key-value-store/'+key)
                 return r.json(),r.status_code
@@ -67,6 +84,7 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
+# we should have a GET_ALL(self) that returns all
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
