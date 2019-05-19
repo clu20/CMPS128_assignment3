@@ -9,7 +9,6 @@ app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
-replica_ips = ["10.10.0.2:8080", "10.10.0.3:8080", "10.10.0.4.8080"]
 
 class key_value(Resource):
     def get(self, key):
@@ -73,12 +72,7 @@ class key_value(Resource):
 
 class Views(Resource):
     def get(self):
-    	if request.host == '127.0.0.1:8082':
-    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[0]))
-    	elif request.host == '127.0.0.1:8083':
-    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[1]))
-    	else:
-    		return make_response(jsonify(message="View retrieved successfully", view = replica_ips[2]))
+        return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
 
 
         
