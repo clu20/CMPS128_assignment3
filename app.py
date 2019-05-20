@@ -74,10 +74,25 @@ class Views(Resource):
     def get(self):
         return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
 
-
-        
-
-
+    def delete(self):
+        view_list = os.environ['VIEW'].split(',')
+        new_view = ''
+        msg = request.get_json()
+        socket_add = msg.get('socket-address')
+        if socket_add in view_list:
+            view_list.remove(socket_add)
+            for x in view_list:
+                new_view += x+','
+            os.environ['VIEW'] = new_view
+            for view in view_list:
+                if view != os.environ['SOCKET_ADDRESS']:
+                    beginning = 'http://'
+                    end_point = '/key-value-store-view'
+                    replica = beginning+view+end_point
+                    requests.delete(replica, json = {'socket-address': socket_add})
+            return make_response(jsonify(message= 'Replica successfully deleted from the view'))
+        else:
+            return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
