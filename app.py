@@ -84,9 +84,18 @@ class Views(Resource):
             else:
                 new_view = os.environ['VIEW'] + ',' + socket_add
                 os.environ['VIEW'] = new_view
+                #broadcast the new replica to be in other replica views
+                for view in view_list:
+                    if view != os.environ['SOCKET_ADDRESS']:
+                        beginning = 'http://'
+                        end_point = '/key-value-store-view'
+                        replica = beginning+view+end_point
+                        requests.put(replica, json = {'socket-address': socket_add})
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
+        
+
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
 api.add_resource(Views, '/key-value-store-view')
