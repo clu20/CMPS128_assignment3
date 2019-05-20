@@ -81,8 +81,14 @@ class Views(Resource):
         socket_add = msg.get('socket-address')
         if socket_add in view_list:
             view_list.remove(socket_add)
-            for x in view_list:
-                new_view += x+','
+            list_length = len(view_list)
+            x = 0
+            while x < list_length:
+                if(x == list_length - 1):
+                    new_view+=view_list[x]
+                else:
+                    new_view += view_list[x]+','
+                x+=1
             os.environ['VIEW'] = new_view
             for view in view_list:
                 if view != os.environ['SOCKET_ADDRESS']:
