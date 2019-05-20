@@ -84,11 +84,16 @@ class Views(Resource):
             else:
                 new_view = os.environ['VIEW'] + ',' + socket_add
                 os.environ['VIEW'] = new_view
+                beginning = 'http://'
+                end_point = '/key-value-store-view'
+                #new replica now contains everything from another key-value-store replica
+                replica_url = beginning+socket_add+end_point
+                for key in newdict:
+                    json = request.get_json()
+                    requests.put(replica_url+'/'+key, json=json)
                 #broadcast the new replica to be in other replica views
                 for view in view_list:
                     if view != os.environ['SOCKET_ADDRESS']:
-                        beginning = 'http://'
-                        end_point = '/key-value-store-view'
                         replica = beginning+view+end_point
                         requests.put(replica, json = {'socket-address': socket_add})
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
