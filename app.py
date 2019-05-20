@@ -1,5 +1,3 @@
-
-
 from flask import Flask, jsonify, request, make_response, g
 from flask_restful import Api, Resource
 
@@ -106,9 +104,11 @@ class Views(Resource):
         msg = request.get_json()
         socket_add = msg.get('socket-address')
         if socket_add in view_list:
+            #Remove socket-address if in VIEW
             view_list.remove(socket_add)
             list_length = len(view_list)
             x = 0
+            #Create new VIEW string for environment var 'VIEW'
             while x < list_length:
                 if(x == list_length - 1):
                     new_view+=view_list[x]
@@ -116,6 +116,7 @@ class Views(Resource):
                     new_view += view_list[x]+','
                 x+=1
             os.environ['VIEW'] = new_view
+            #Broadcast the VIEW delete to all other socket-addresses
             for view in view_list:
                 if view != os.environ['SOCKET_ADDRESS']:
                     beginning = 'http://'
