@@ -102,14 +102,15 @@ class Views(Resource):
         socket_add = msg.get('socket-address')
         if socket_add in view_list:
             view_list.remove(socket_add)
-            list_length = len(view_list)
-            x = 0
-            while x < list_length:
-                if(x == list_length - 1):
-                    new_view+=view_list[x]
-                else:
-                    new_view += view_list[x]+','
-                x+=1
+            new_view = self.buildView(view_list)
+            # list_length = len(view_list)
+            # x = 0
+            # while x < list_length:
+            #     if(x == list_length - 1):
+            #         new_view += view_list[x]
+            #     else:
+            #         new_view += view_list[x] + ','
+            #     x += 1
             os.environ['VIEW'] = new_view
             for view in view_list:
                 if view != os.environ['SOCKET_ADDRESS']:
@@ -120,6 +121,15 @@ class Views(Resource):
             return make_response(jsonify(message= 'Replica successfully deleted from the view'))
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
+
+
+    #builds the new list of views by seperating the the view list and intersecting commas
+    def buildView(view):
+    	res = [','] * (len(view) * 2 - 1)
+    	res[0::2] = view
+    	return ''.join(res)
+
+
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
 api.add_resource(Views, '/key-value-store-view')
