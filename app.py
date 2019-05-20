@@ -95,7 +95,31 @@ class Views(Resource):
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
         
-
+    def delete(self):
+        view_list = os.environ['VIEW'].split(',')
+        new_view = ''
+        msg = request.get_json()
+        socket_add = msg.get('socket-address')
+        if socket_add in view_list:
+            view_list.remove(socket_add)
+            list_length = len(view_list)
+            x = 0
+            while x < list_length:
+                if(x == list_length - 1):
+                    new_view+=view_list[x]
+                else:
+                    new_view += view_list[x]+','
+                x+=1
+            os.environ['VIEW'] = new_view
+            for view in view_list:
+                if view != os.environ['SOCKET_ADDRESS']:
+                    beginning = 'http://'
+                    end_point = '/key-value-store-view'
+                    replica = beginning+view+end_point
+                    requests.delete(replica, json = {'socket-address': socket_add})
+            return make_response(jsonify(message= 'Replica successfully deleted from the view'))
+        else:
+            return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
 api.add_resource(Views, '/key-value-store-view')
