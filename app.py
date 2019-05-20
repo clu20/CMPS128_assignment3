@@ -74,11 +74,19 @@ class Views(Resource):
     def get(self):
         return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
 
-
-        
-
-
-
+    def put(self):
+        view_list = os.environ['VIEW'].split(',')
+        msg = request.get_json()
+        socket_add = msg.get('socket-address')
+        if socket_add:
+            if socket_add in view_list:
+                return make_response(jsonify(error='Socket address already exists in the view', message= 'Error in PUT'), 404)
+            else:
+                new_view = os.environ['VIEW'] + ',' + socket_add
+                os.environ['VIEW'] = new_view
+                return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
+        else:
+            return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
 api.add_resource(Views, '/key-value-store-view')
