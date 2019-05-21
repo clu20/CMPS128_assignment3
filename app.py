@@ -84,9 +84,13 @@ class key_value(Resource):
         end_point = '/key-value-store-view'
         status_list = []
         for rep in view_list:
-            rep_url = beginning + rep + end_point
-            r = requests.get(rep_url)
-            status_list.append((rep, r.status_code))
+            try:
+                rep_url = beginning + rep + end_point
+                r = requests.get(rep_url)
+                status_list.append((rep, r.status_code))
+            except:
+                status_list.append((rep, 500))
+
         return status_list
 
 
