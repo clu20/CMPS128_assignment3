@@ -36,17 +36,28 @@ class key_value(Resource):
                 return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
             if len(key) < 50:
+                view_list = os.environ['VIEW']
                 message = request.get_json()
                 v = message.get('value')
+                #about to broadcast requests:
+                #must check that all the other replicas are alive
+                responses = self.replicas_statuses()
+                
                 if v:
                     if key in newdict:
                         #edit value @ key, key
                         newdict[key] = v
-                        return make_response(jsonify(message='Updated successfully', replaced=True),200)
+                        res = jsonify(responses)
+                        res.status_code = 200
+                        return res
+                        # return make_response(jsonify(message='Updated successfully', replaced=True, responses=responses),200)
                     else:
                     #add new value @ key, key
                         newdict[key] = v
-                        return make_response(jsonify(message='Added successfully', replaced=False), 201)
+                        res = jsonify(responses)
+                        res.status_code = 200
+                        return res
+                        # return make_response(jsonify(message='Added successfully', replaced=False, responses=responses), 201)
                 else:
                     return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
             else:
@@ -65,6 +76,21 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in DELETE"), 404)
             else:
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
+
+    #to check all the statuses of every replica, used before every put key-value-store method
+    def replicas_statuses(self):
+        view_list = os.environ['VIEW'].split(',')
+        beginning = 'http://'
+        end_point = '/key-value-store-view'
+        status_list = []
+        for rep in view_list:
+            rep_url = beginning + rep + end_point
+            r = requests.get(rep_url)
+            status_list.append((rep, r.status_code))
+        return status_list
+
+
+    # def broadcast_request(self, method, statuses):
 
 
 
@@ -131,21 +157,6 @@ class Views(Resource):
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
-    #to check all the statuses of every replica, used before every put key-value-store method
-    def check_replicas(self):
-        view_list = os.environ['VIEW'].split(',')
-        beginning = 'http://'
-        end_point = '/key-value-store-view'
-        status_list = []
-        for rep in view_list:
-            rep_url = beginning + rep + end_point
-            status_list.append(requests.get(rep_url))
-        return status_list
-
-
-
-
-        
 
 
 
