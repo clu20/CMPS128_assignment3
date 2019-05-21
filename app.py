@@ -123,7 +123,7 @@ class Views(Resource):
                     end_point = '/key-value-store-view'
                     replica = beginning+view+end_point
                     requests.delete(replica, json = {'socket-address': socket_add})
-            return make_response(jsonify(message= 'Replica successfully deleted from the view'))
+            return make_response(jsonify(message= 'Replica successfully deleted from the view'), 200)
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
