@@ -1,5 +1,3 @@
-
-
 from flask import Flask, jsonify, request, make_response, g
 from flask_restful import Api, Resource
 
@@ -28,8 +26,6 @@ class key_value(Resource):
                 #on key value not found error
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in GET"), 404)
 
-    #key must also be sent to other replicas' key value store
-    #so just get all the other views and add it 
     def put(self, key):
         if 'FORWARDING_ADDRESS' in os.environ:
             try:
@@ -50,7 +46,6 @@ class key_value(Resource):
                     else:
                     #add new value @ key, key
                         newdict[key] = v
-
                         return make_response(jsonify(message='Added successfully', replaced=False), 201)
                 else:
                     return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
@@ -74,9 +69,13 @@ class key_value(Resource):
 
 
 class Views(Resource):
+
+
     def get(self):
-        return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
-    
+        #find out which view you are in
+        view_addr = os.environ['SOCKET_ADDRESS']
+        return make_response(jsonify(message='View retrieved successfully', view = view_addr ), 200)
+
     def put(self):
         view_list = os.environ['VIEW'].split(',')
         msg = request.get_json()
@@ -89,10 +88,11 @@ class Views(Resource):
                 os.environ['VIEW'] = new_view
                 beginning = 'http://'
                 end_point = '/key-value-store-view'
+                #new replica now contains everything from another key-value-store replica
                 replica_url = beginning+socket_add+end_point
                 for key in newdict:
-                	json = requests.get_json()
-                	requests.put(replica_url+'/'+key, json=json)
+                    json = request.get_json()
+                    requests.put(replica_url+'/'+key, json=json)
                 #broadcast the new replica to be in other replica views
                 for view in view_list:
                     if view != os.environ['SOCKET_ADDRESS']:
@@ -108,17 +108,19 @@ class Views(Resource):
         msg = request.get_json()
         socket_add = msg.get('socket-address')
         if socket_add in view_list:
+            #Remove socket-address if in VIEW
             view_list.remove(socket_add)
-            # new_view = self.buildView(view_list)
             list_length = len(view_list)
             x = 0
+            #Create new VIEW string for environment var 'VIEW'
             while x < list_length:
                 if(x == list_length - 1):
-                    new_view += view_list[x]
+                    new_view+=view_list[x]
                 else:
-                    new_view += view_list[x] + ','
-                x += 1
+                    new_view += view_list[x]+','
+                x+=1
             os.environ['VIEW'] = new_view
+            #Broadcast the VIEW delete to all other socket-addresses
             for view in view_list:
                 if view != os.environ['SOCKET_ADDRESS']:
                     beginning = 'http://'
@@ -129,12 +131,21 @@ class Views(Resource):
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
+    #to check all the statuses of every replica, used before every put key-value-store method
+    def check_replicas(self):
+        view_list = os.environ['VIEW'].split(',')
+        beginning = 'http://'
+        end_point = '/key-value-store-view'
+        status_list = []
+        for rep in view_list:
+            rep_url = beginning + rep + end_point
+            status_list.append(requests.get(rep_url))
+        return status_list
 
-    #builds the new list of views by seperating the the view list and intersecting commas
-    def buildView(view):
-    	res = [','] * (len(view) * 2 - 1)
-    	res[0::2] = view
-    	return ''.join(res)
+
+
+
+        
 
 
 
