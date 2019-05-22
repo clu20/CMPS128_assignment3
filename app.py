@@ -7,6 +7,7 @@ app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
+ver = {}
 
 class key_value(Resource):
     def get(self, key):
@@ -35,6 +36,7 @@ class key_value(Resource):
             except:
                 return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
+
             if len(key) < 50:
                 message = request.get_json()
                 v = message.get('value')
@@ -122,7 +124,10 @@ class Views(Resource):
                     beginning = 'http://'
                     end_point = '/key-value-store-view'
                     replica = beginning+view+end_point
-                    requests.delete(replica, json = {'socket-address': socket_add})
+                    try:
+                        requests.delete(replica, json = {'socket-address': socket_add})
+                    except:
+                        requests.delete(beginning+os.environ['SOCKET_ADDRESS']+end_point, json = {'socket-address': view})
             return make_response(jsonify(message= 'Replica successfully deleted from the view'), 200)
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
