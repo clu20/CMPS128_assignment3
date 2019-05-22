@@ -35,29 +35,34 @@ class key_value(Resource):
             except:
                 return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
+
             if len(key) < 50:
-                view_list = os.environ['VIEW']
+                view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
                 v = message.get('value')
                 #about to broadcast requests:
                 #must check that all the other replicas are alive
                 responses = self.replicas_statuses()
-                
+                #delete the dead replicas from the VIEW
+                for rep in responses:
+                    if rep[1] != 200:
+                    	responses.remove(rep)
+
+                beginning = 'http://'
+                end_point = '/key-value-store/'
+                json = request.get_json()
+                #check if the request is being forwarded by another replica
+                if request.remote_addr not in os.environ["VIEW"]:
+                    self.broadcast_request(responses, "PUT", key)
                 if v:
                     if key in newdict:
                         #edit value @ key, key
                         newdict[key] = v
-                        res = jsonify(responses)
-                        res.status_code = 200
-                        return res
-                        # return make_response(jsonify(message='Updated successfully', replaced=True, responses=responses),200)
+                        return make_response(jsonify(message='Updated successfully', replaced=True, responses=responses),200)
                     else:
                     #add new value @ key, key
                         newdict[key] = v
-                        res = jsonify(responses)
-                        res.status_code = 200
-                        return res
-                        # return make_response(jsonify(message='Added successfully', replaced=False, responses=responses), 201)
+                        return make_response(jsonify(message='Added successfully', replaced=False, responses=responses), 201)
                 else:
                     return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
             else:
@@ -87,24 +92,47 @@ class key_value(Resource):
             try:
                 rep_url = beginning + rep + end_point
                 r = requests.get(rep_url)
-                status_list.append((rep, r.status_code))
+                content = request.get_json()
+                remote_addr = content.get('remote_addr')
+                access_route = content.get('access_route')
+                host = content.get('host')
+                status_list.append((rep, r.status_code, remote_addr, access_route, host))
             except:
                 status_list.append((rep, 500))
 
         return status_list
 
 
-    # def broadcast_request(self, method, statuses):
-
+    #need to add optional parameter
+    def broadcast_request(self, statuses, method , key):
+        current_address = os.environ['SOCKET_ADDRESS']
+        beginning = 'http://'
+        end_point = '/key-value-store/'
+        for reps in statuses:
+            rep_url = beginning + reps[0] + end_point + key
+            json = request.get_json()
+            if current_address != reps[0]:
+                if method == "PUT":
+                    requests.put(rep_url, json=json)
+                elif method == "DELETE":
+                    requests.delete(rep_url, json=json)
+                elif method == "GET":
+                    requests.get(rep_url, json=json)
+ 
+    def printRemote(self, addr):
+        return make_response(jsonify(address=addr))
 
 
 class Views(Resource):
 
 
     def get(self):
-        #find out which view you are in
+        #find out which view you are in 
         view_addr = os.environ['SOCKET_ADDRESS']
-        return make_response(jsonify(message='View retrieved successfully', view = view_addr ), 200)
+        remote_addr =  request.remote_addr
+        access_route = request.access_route
+        host = request.host
+        return make_response(jsonify(message='View retrieved successfully', view = view_addr , remote_addr = remote_addr, access_route = access_route, host=host), 200)
 
     def put(self):
         view_list = os.environ['VIEW'].split(',')
@@ -161,7 +189,10 @@ class Views(Resource):
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
-
+    def buildView(view):
+        res = [','] * (len(view) * 2 - 1)
+        res[0::2] = view
+        return ''.join(res)
 
 
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
