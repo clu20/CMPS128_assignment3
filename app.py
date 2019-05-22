@@ -95,7 +95,10 @@ class Views(Resource):
                 for view in view_list:
                     if view != os.environ['SOCKET_ADDRESS']:
                         replica = beginning+view+end_point
-                        requests.put(replica, json = {'socket-address': socket_add})
+                        try:
+                            requests.put(replica, json = {'socket-address': socket_add})
+                        except:
+                            requests.delete(beginning+os.environ['SOCKET_ADDRESS']+end_point, json = {'socket-address': socket_add})
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
