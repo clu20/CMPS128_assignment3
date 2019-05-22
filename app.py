@@ -40,7 +40,6 @@ class key_value(Resource):
                 view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
                 v = message.get('value')
-                #about to broadcast requests:
                 #must check that all the other replicas are alive
                 responses = self.replicas_statuses()
                 #delete the dead replicas from the VIEW
@@ -92,18 +91,14 @@ class key_value(Resource):
             try:
                 rep_url = beginning + rep + end_point
                 r = requests.get(rep_url)
-                content = request.get_json()
-                remote_addr = content.get('remote_addr')
-                access_route = content.get('access_route')
-                host = content.get('host')
-                status_list.append((rep, r.status_code, remote_addr, access_route, host))
+                status_list.append((rep, r.status_code))
             except:
                 status_list.append((rep, 500))
 
         return status_list
 
 
-    #need to add optional parameter
+    #TODO: need to add optional parameter for key
     def broadcast_request(self, statuses, method , key):
         current_address = os.environ['SOCKET_ADDRESS']
         beginning = 'http://'
