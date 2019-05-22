@@ -7,6 +7,7 @@ app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
+version = {}
 
 class key_value(Resource):
     def get(self, key):
@@ -37,18 +38,22 @@ class key_value(Resource):
         else:
             if len(key) < 50:
                 message = request.get_json()
-                v = message.get('value')
-                if v:
-                    if key in newdict:
-                        #edit value @ key, key
-                        newdict[key] = v
-                        return make_response(jsonify(message='Updated successfully', replaced=True),200)
-                    else:
-                    #add new value @ key, key
-                        newdict[key] = v
-                        return make_response(jsonify(message='Added successfully', replaced=False), 201)
+                value = message.get('value')
+                ver = message.get('casual-metadata')
+                if ver:
+                    print('test')
                 else:
-                    return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
+                    if value:
+                        if key in newdict:
+                            #edit value @ key, key
+                            newdict[key] = value
+                            return make_response(jsonify(message='Updated successfully', replaced=True),200)
+                        else:
+                            #add new value @ key, key
+                            newdict[key] = value
+                            return make_response(jsonify(message='Added successfully', replaced=False), 201)
+                    else:
+                        return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
             else:
                 return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
 
@@ -93,7 +98,10 @@ class Views(Resource):
                 for view in view_list:
                     if view != os.environ['SOCKET_ADDRESS']:
                         replica = beginning+view+end_point
-                        requests.put(replica, json = {'socket-address': socket_add})
+                        try:
+                            requests.put(replica, json = {'socket-address': socket_add})
+                        except:
+                            requests.delete(beginning+os.environ['SOCKET_ADDRESS']+end_point, json = {'socket-address': socket_add})
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
@@ -122,7 +130,10 @@ class Views(Resource):
                     beginning = 'http://'
                     end_point = '/key-value-store-view'
                     replica = beginning+view+end_point
-                    requests.delete(replica, json = {'socket-address': socket_add})
+                    try:
+                        requests.delete(replica, json = {'socket-address': socket_add})
+                    except:
+                        requests.delete(beginning+os.environ['SOCKET_ADDRESS']+end_point, json = {'socket-address': view})
             return make_response(jsonify(message= 'Replica successfully deleted from the view'), 200)
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
