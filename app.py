@@ -71,10 +71,10 @@ class key_value(Resource):
                 return make_response(jsonify(error='Main instance is down', message='Error in DELETE'),503)
         else:
             if newdict.pop(key,None) == None:
-                view_list = os.environ['VIEW'].split(',')
-                self.broadcast_request(view_list, 'DEL', key)
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in DELETE"), 404)
             else:
+                view_list = os.environ['VIEW'].split(',')
+                self.broadcast_request(view_list, 'DEL', key)
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
     #TODO: need to add optional parameter for key
@@ -84,18 +84,18 @@ class key_value(Resource):
         end_point = '/key-value-store/'
         for reps in viewlist:
             rep_url = beginning + reps + end_point + key
-            json = request.get_json()
+            # json = request.get_json()
             if current_address != reps:
                 if method == "PUT":
                     try:
-                        requests.put(rep_url, json=json)
+                        requests.put(rep_url, json={'value': key})
                     except:
-                        requests.delete(beginning+current_address+end_point, json = {'socket-address': reps})
-                elif method == "DEL":
+                        requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
+                elif method == 'DEL':
                     try:
-                        requests.delete(rep_url, json=json)
+                        requests.delete(rep_url)
                     except:
-                        requests.delete(beginning+current_address+end_point, json = {'socket-address': reps})
+                        requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
 
 class Views(Resource):
 
