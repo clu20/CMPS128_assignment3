@@ -7,9 +7,14 @@ app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
-ver = {}
+versionList = []
+counter = 0
 
 class key_value(Resource):
+    
+    def __init__(self):
+        self.counter = 0
+
     def get(self, key):
         if 'FORWARDING_ADDRESS' in os.environ:
             #nonempty forwarding address forward to main instance
@@ -37,27 +42,42 @@ class key_value(Resource):
                 return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
             if len(key) < 50:
-                view_list = os.environ['VIEW'].split(',')
-                message = request.get_json()
-                v = message.get('value')
                 beginning = 'http://'
                 end_point = '/key-value-store/'
                 json = request.get_json()
-                if v:
-                    if key in newdict:
-                        #edit value @ key, key
-                        newdict[key] = v
-                        if request.remote_addr not in os.environ['VIEW']:
-                            self.broadcast_request(view_list, "PUT", key)
-                        return make_response(jsonify(message='Updated successfully', replaced=True),200)
+                view_list = os.environ['VIEW'].split(',')
+                message = request.get_json()
+                v = message.get('value')
+                meta = message.get('causal-metadata')
+                # for some reason splitting "" breaks the code
+                if len(meta) > 1:
+                    meta = meta.split(', ')
+                # if there is no meta data list or the meta is already in the list
+                if meta == "" or meta == versionList:
+                    #create version
+                    global counter
+                    counter += 1
+                    version = "V" + str(counter)
+                    versionList.append(version)
+                    if v:
+                        if key in newdict:
+                            #edit value @ key, key
+                            newdict[key] = v
+                            if request.remote_addr not in os.environ['VIEW']:
+                                self.broadcast_request(view_list, "PUT", key, versionList, version)
+                                json = {}
+                            return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
+                        else:
+                            #add new value @ key, key
+                            newdict[key] = v
+                            if request.remote_addr not in os.environ['VIEW']:
+                                self.broadcast_request(view_list, "PUT", key, versionList, version)
+                            return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
                     else:
-                    #add new value @ key, key
-                        newdict[key] = v
-                        if request.remote_addr not in os.environ['VIEW']:
-                            self.broadcast_request(view_list, "PUT", key)
-                        return make_response(jsonify(message='Added successfully', replaced=False), 201)
+                        return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
                 else:
-                    return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
+                    return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
+                    
             else:
                 return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
 
@@ -78,7 +98,7 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
     #TODO: need to add optional parameter for key
-    def broadcast_request(self, viewlist, method , key):
+    def broadcast_request(self, viewlist, method , key, versionList, version):
         current_address = os.environ['SOCKET_ADDRESS']
         beginning = 'http://'
         end_point = '/key-value-store/'
@@ -88,14 +108,16 @@ class key_value(Resource):
             if current_address != reps:
                 if method == "PUT":
                     try:
-                        requests.put(rep_url, json={'value': key})
+                        requests.put(rep_url, json={'value': key, 'version': version, 'causal-metadata': versionList})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
                 elif method == 'DEL':
                     try:
-                        requests.delete(rep_url)
+                        requests.delete(rep_url, json={'value': key, 'version': version, 'causal-metadata': versionList})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
+
+
 
 class Views(Resource):
 
