@@ -64,14 +64,14 @@ class key_value(Resource):
                             #edit value @ key, key
                             newdict[key] = v
                             if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, versionList, version)
-                                json = {}
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
+                                
                             return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
                         else:
                             #add new value @ key, key
                             newdict[key] = v
                             if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, versionList, version)
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
                             return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
                     else:
                         return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
@@ -98,7 +98,7 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
     #TODO: need to add optional parameter for key
-    def broadcast_request(self, viewlist, method , key, versionList, version):
+    def broadcast_request(self, viewlist, method , key, value, version, meta):
         current_address = os.environ['SOCKET_ADDRESS']
         beginning = 'http://'
         end_point = '/key-value-store/'
@@ -108,12 +108,12 @@ class key_value(Resource):
             if current_address != reps:
                 if method == "PUT":
                     try:
-                        requests.put(rep_url, json={'value': key, 'version': version, 'causal-metadata': versionList})
+                        requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
                 elif method == 'DEL':
                     try:
-                        requests.delete(rep_url, json={'value': key, 'version': version, 'causal-metadata': versionList})
+                        requests.delete(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
 
