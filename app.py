@@ -172,9 +172,8 @@ class key_value(Resource):
                     versionList.append(version)
                     newdict[key] = None
                     if request.remote_addr not in os.environ['VIEW']:
-                        self.broadcast_request(view_list, "DELETE", key, versionList, version)
-                        json = {}
-                        return make_response(jsonify(message='Deleted successfully', version = version),200)
+                        self.broadcast_request(view_list, "DELETE", key, version, meta)
+                    return make_response(jsonify(message='Deleted successfully', version = version),200)
                 else:
                     return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
 
