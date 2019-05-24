@@ -44,38 +44,49 @@ class key_value(Resource):
             if len(key) < 50:
                 beginning = 'http://'
                 end_point = '/key-value-store/'
-                json = request.get_json()
                 view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
                 v = message.get('value')
+                sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
+                global counter
                 meta = message.get('causal-metadata')
+
                 # for some reason splitting "" breaks the code
                 if len(meta) > 1:
                     meta = meta.split(', ')
                 # if there is no meta data list or the meta is already in the list
                 if meta == "" or meta == versionList:
-                    #create version
-                    global counter
-                    counter += 1
-                    version = "V" + str(counter)
-                    versionList.append(version)
+                #if not sent from client use the same version broadcasted to you and set the right counter.
+                #create version
+                    if not sentFromClient:
+                        broadcasted_counter = message.get('counter')
+                        counter = broadcasted_counter
+                        version = message.get('version')
+                        versionList.append(version)
+                    else:
+                        counter += 1
+                        version = "V" + str(counter)
+                        versionList.append(version)
                     if v:
                         if key in newdict:
                             #edit value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
-                                
-                            return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                            json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
+                            return make_response(json, 200)
                         else:
                             #add new value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
-                            return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                            json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
+
+                            return make_response(json, 201)
                     else:
                         return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
                 else:
+                    #just loop this shit but 
                     return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
                     
             else:
@@ -98,7 +109,7 @@ class key_value(Resource):
                 return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
 
     #TODO: need to add optional parameter for key
-    def broadcast_request(self, viewlist, method , key, value, version, meta):
+    def broadcast_request(self, viewlist, method , key, value, version, meta, counter):
         current_address = os.environ['SOCKET_ADDRESS']
         beginning = 'http://'
         end_point = '/key-value-store/'
@@ -108,12 +119,12 @@ class key_value(Resource):
             if current_address != reps:
                 if method == "PUT":
                     try:
-                        requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
+                        requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta, 'counter': counter})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
                 elif method == 'DEL':
                     try:
-                        requests.delete(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
+                        requests.delete(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta, 'counter': counter})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
 
