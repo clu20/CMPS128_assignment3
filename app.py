@@ -6,6 +6,16 @@ import os, requests
 app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
+view = os.environ.get('VIEW').split(',')
+socket = os.environ.get('SOCKET_ADDRESS')
+for ip in view:
+    if ip != socket:
+        beginning = 'http://'
+        end_point = '/key-value-store-view'
+        replica = beginning+ip+end_point
+        requests.put(replica, json = {'socket-address': socket_add})
+
+
 newdict = {}
 versionList = []
 counter = 0
@@ -18,8 +28,9 @@ class view(Resource):
     #       if not, send error message
     #PUT: if socket is already in view, send message: already in view
     #       if not, add socket ip to view, send PUT message to all ips in view except socket's
+
     def get(self):
-        #find out ip's in view (running on port-ip)
+        #find out ip's in view
         view_addrs = os.environ['VIEW']
         return make_response(jsonify(message='View retrieved successfully', view = view_addrs), 200)
 
