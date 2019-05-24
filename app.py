@@ -5,7 +5,10 @@ import os, requests
 
 app = Flask(__name__)
 api = Api(app)
+forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
+versionList = []
+counter = 0
 
 class view(Resource):
     # contains view operations (functions)----GET, DELETE, PUT
@@ -16,7 +19,7 @@ class view(Resource):
     #PUT: if socket is already in view, send message: already in view
     #       if not, add socket ip to view, send PUT message to all ips in view except socket's
     def get(self):
-        #find out ip's in view (running on port-ip) 
+        #find out ip's in view (running on port-ip)
         view_addrs = os.environ['VIEW']
         return make_response(jsonify(message='View retrieved successfully', view = view_addrs), 200)
 
@@ -70,70 +73,130 @@ class view(Resource):
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
-    def buildView(view):
-        res = [','] * (len(view) * 2 - 1)
-        res[0::2] = view
-        return ''.join(res)
-
-
 class key_value(Resource):
-    #operations are open to clients and replicas
+
+    def __init__(self):
+        self.counter = 0
+
     def get(self, key):
-        if key in newdict:
-            #on key value found return found value
-            value = newdict[key]
-            return make_response(jsonify(doesExist=True, message="Retrieved successfully", value=value), 200)
+        if 'FORWARDING_ADDRESS' in os.environ:
+            #nonempty forwarding address forward to main instance
+            try:
+                r = requests.get('http://10.10.0.2:8080/key-value-store/' + key)
+                return r.json(),r.status_code
+            except:
+                return make_response(jsonify(error= 'Main instance is down', message = 'Error in GET'), 503)
         else:
-            #on key value not found error
-            return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in GET"), 404)
+            if key in newdict:
+                #on key value found return found value
+                value = newdict[key]
+                return make_response(jsonify(doesExist=True, message="Retrieved successfully", value=value), 200)
+            else:
+                #on key value not found error
+                return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in GET"), 404)
 
     def put(self, key):
-        # for ip in view ....
-        # Then add response to a list hashed to the key? -- we can have "value ie.(key_value)" and "version, (incremented per write)"
-        if len(key) < 50:
-            message = request.get_json()
-            v = message.get('value')
-            if v:
-                if key in newdict:
-                    #edit value @ key, key
-                    newdict[key] = v
-                    return make_response(jsonify(message='Updated successfully', replaced=True),200)
-                else:
-                #add new value @ key, key
-                    newdict[key] = v
-                    return make_response(jsonify(message='Added successfully', replaced=False), 201)
-            else:
-                return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
+        if 'FORWARDING_ADDRESS' in os.environ:
+            try:
+                json = request.get_json()
+                r = requests.put('http://10.10.0.2:8080/key-value-store/'+key, json=json)
+                return r.json(),r.status_code
+            except:
+                return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
-            return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
+            if len(key) < 50:
+                beginning = 'http://'
+                end_point = '/key-value-store/'
+                json = request.get_json()
+                view_list = os.environ['VIEW'].split(',')
+                message = request.get_json()
+                v = message.get('value')
+                meta = message.get('causal-metadata')
+                # for some reason splitting "" breaks the code
+                if len(meta) > 1:
+                    meta = meta.split(', ')
+                # if there is no meta data list or the meta is already in the list
+                if meta == "" or meta == versionList:
+                    #create version
+                    global counter
+                    counter += 1
+                    version = "V" + str(counter)
+                    versionList.append(version)
+                    if v:
+                        if key in newdict:
+                            #edit value @ key, key
+                            newdict[key] = v
+                            if request.remote_addr not in os.environ['VIEW']:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
+                            return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
+                        else:
+                            #add new value @ key, key
+                            newdict[key] = v
+                            if request.remote_addr not in os.environ['VIEW']:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
+                            return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
+                    else:
+                        return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
+                else:
+                    return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
+
+            else:
+                return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
+
 
     def delete(self, key):
-        # for ip in view ....
-        # Then add response to a list hashed to the key? -- we can have "value(key_value)" and "version(incremented per write)"
-        if newdict.pop(key,None) == None:
-            return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in DELETE"), 404)
+        if 'FORWARDING_ADDRESS' in os.environ:
+            try:
+                r = requests.delete('http://10.10.0.2:8080/key-value-store/'+key)
+                return r.json(),r.status_code
+            except:
+                return make_response(jsonify(error='Main instance is down', message='Error in DELETE'),503)
         else:
-            return make_response(jsonify(doesExist=True, message="Deleted successfully"), 200)
+            beginning = 'http://'
+            end_point = '/key-value-store/'
+            json = request.get_json()
+            view_list = os.environ['VIEW'].split(',')
+            message = request.get_json()
+            meta = message.get('causal-metadata')
+            #test for key membership
+            if newdict.get(key,None) == None:
+                return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in DELETE"), 404)
+            else:
+                if len(meta) > 1:
+                    meta = meta.split(', ')
+                if meta == "" or meta == versionList:
+                    #create version
+                    global counter
+                    counter += 1
+                    version = "V" + str(counter)
+                    versionList.append(version)
+                    newdict[key] = None
+                    if request.remote_addr not in os.environ['VIEW']:
+                        self.broadcast_request(view_list, "DELETE", key, versionList, version)
+                        json = {}
+                        return make_response(jsonify(message='Deleted successfully', version = version),200)
+                else:
+                    return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
 
     #TODO: need to add optional parameter for key
-    def broadcast_request(self, statuses, method , key):
+    def broadcast_request(self, viewlist, method , key, value, version, meta):
         current_address = os.environ['SOCKET_ADDRESS']
         beginning = 'http://'
         end_point = '/key-value-store/'
-        for reps in statuses:
-            rep_url = beginning + reps[0] + end_point + key
-            json = request.get_json()
-            if current_address != reps[0]:
+        for reps in viewlist:
+            rep_url = beginning + reps + end_point + key
+            # json = request.get_json()
+            if current_address != reps:
                 if method == "PUT":
-                    requests.put(rep_url, json=json)
-                elif method == "DELETE":
-                    requests.delete(rep_url, json=json)
-                elif method == "GET":
-                    requests.get(rep_url, json=json)
-
-    def printRemote(self, addr):
-        return make_response(jsonify(address=addr))
-
+                    try:
+                        requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
+                    except:
+                        requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
+                elif method == 'DEL':
+                    try:
+                        requests.delete(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta})
+                    except:
+                        requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
 
 api.add_resource(view, '/key-value-store-view')
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
