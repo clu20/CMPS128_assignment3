@@ -218,7 +218,7 @@ class TestHW3(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(responseInJson['value'], 'value2')
 
-    ########################## Availability Test #######################################################
+    '''########################## Availability Test #######################################################
     def test_b_availability(self):
 
         # stop and remove containers from possible previous runs
@@ -464,7 +464,7 @@ class TestHW3(unittest.TestCase):
         self.assertEqual(third_get_value, 'bar')
         self.assertEqual(third_get_version, second_put_version)
         self.assertEqual(third_get_causal_metadata, second_put_causal_metadata)
-
+'''
 
 if __name__ == '__main__':
     unittest.main()

@@ -6,15 +6,19 @@ import os, requests
 app = Flask(__name__)
 api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
-view = os.environ.get('VIEW').split(',')
+view = os.environ.get('VIEW')
 socket = os.environ.get('SOCKET_ADDRESS')
-for ip in view:
+view_list = view.split(',')
+##on new run, broadcast put(socket address) to all other replicas in view
+for ip in view_list:
     if ip != socket:
         beginning = 'http://'
         end_point = '/key-value-store-view'
         replica = beginning+ip+end_point
-        requests.put(replica, json = {'socket-address': socket_add})
-
+        try:
+            requests.put(replica, json = {'socket-address': socket})
+        except:
+            print("Error in View")
 
 newdict = {}
 versionList = []
@@ -31,32 +35,35 @@ class view(Resource):
 
     def get(self):
         #find out ip's in view
-        view_addrs = os.environ['VIEW']
-        return make_response(jsonify(message='View retrieved successfully', view = view_addrs), 200)
+        global view_list
+        viewString = ''
+        for ip in view_list:
+            viewString += ip + ','
+        viewString = viewString[:-1]
+        return make_response(jsonify(message='View retrieved successfully', view = viewString), 200)
 
     def put(self):
-        view_list = os.environ['VIEW'].split(',')
+        global view_list
         msg = request.get_json()
         socket_add = msg.get('socket-address')
         if socket_add:
             if socket_add in view_list:
                 return make_response(jsonify(error='Socket address already exists in the view', message= 'Error in PUT'), 404)
             else:
-                new_view = os.environ['VIEW'] + ',' + socket_add
-                os.environ['VIEW'] = new_view
+                view = view + ',' + socket_add
                 #broadcast the new replica to be in other replica views
-                for view in view_list:
-                    if view != os.environ['SOCKET_ADDRESS']:
+                for ip in view_list:
+                    if ip != socket:
                         beginning = 'http://'
                         end_point = '/key-value-store-view'
-                        replica = beginning+view+end_point
-                        requests.put(replica, json = {'socket-address': socket_add})
+                        replica = beginning+ip+end_point
+                        requests.put(replica, json = {'socket-address': socket})
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
 
     def delete(self):
-        view_list = os.environ['VIEW'].split(',')
+        global view_list
         new_view = ''
         msg = request.get_json()
         socket_add = msg.get('socket-address')
@@ -72,14 +79,14 @@ class view(Resource):
                 else:
                     new_view += view_list[x]+','
                 x+=1
-            os.environ['VIEW'] = new_view
+            view = new_view
             #Broadcast the VIEW delete to all other socket-addresses
-            for view in view_list:
-                if view != os.environ['SOCKET_ADDRESS']:
+            for ip in view_list:
+                if ip != socket:
                     beginning = 'http://'
                     end_point = '/key-value-store-view'
-                    replica = beginning+view+end_point
-                    requests.delete(replica, json = {'socket-address': socket_add})
+                    replica = beginning+ip+end_point
+                    requests.delete(replica, json = {'socket-address': socket})
             return make_response(jsonify(message= 'Replica successfully deleted from the view'))
         else:
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
@@ -119,7 +126,6 @@ class key_value(Resource):
                 beginning = 'http://'
                 end_point = '/key-value-store/'
                 json = request.get_json()
-                view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
                 v = message.get('value')
                 meta = message.get('causal-metadata')
@@ -137,14 +143,14 @@ class key_value(Resource):
                         if key in newdict:
                             #edit value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
+                            if request.remote_addr not in view:
+                                self.broadcast_request(view, "PUT", key, v, version, meta)
                             return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
                         else:
                             #add new value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in os.environ['VIEW']:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta)
+                            if request.remote_addr not in view:
+                                self.broadcast_request(view, "PUT", key, v, version, meta)
                             return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
                     else:
                         return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
@@ -166,7 +172,6 @@ class key_value(Resource):
             beginning = 'http://'
             end_point = '/key-value-store/'
             json = request.get_json()
-            view_list = os.environ['VIEW'].split(',')
             message = request.get_json()
             meta = message.get('causal-metadata')
             #test for key membership
@@ -182,15 +187,15 @@ class key_value(Resource):
                     version = "V" + str(counter)
                     versionList.append(version)
                     newdict[key] = None
-                    if request.remote_addr not in os.environ['VIEW']:
-                        self.broadcast_request(view_list, "DELETE", key, version, meta)
+                    if request.remote_addr not in view:
+                        self.broadcast_request(view, "DELETE", key, version, meta)
                     return make_response(jsonify(message='Deleted successfully', version = version),200)
                 else:
                     return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
 
     #TODO: need to add optional parameter for key
     def broadcast_request(self, viewlist, method , key, value, version, meta):
-        current_address = os.environ['SOCKET_ADDRESS']
+        current_address = socket
         beginning = 'http://'
         end_point = '/key-value-store/'
         for reps in viewlist:
