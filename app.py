@@ -8,6 +8,7 @@ api = Api(app)
 forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
 versionList = []
+versionDict = {}
 counter = 0
 
 class key_value(Resource):
@@ -27,7 +28,9 @@ class key_value(Resource):
             if key in newdict:
                 #on key value found return found value
                 value = newdict[key]
-                return make_response(jsonify(doesExist=True, message="Retrieved successfully", value=value), 200)
+                string_versionList = ','.join(versionList)
+                json = jsonify({'message': 'Retrieved successfully', 'version': versionDict[key], 'causal-metadata': string_versionList, 'value':value})
+                return make_response(json, 200)
             else:
                 #on key value not found error
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in GET"), 404)
@@ -107,7 +110,7 @@ class key_value(Resource):
                 if method == "PUT":
                     try:
                         requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta, 'counter': counter})
-                    except:
+                    except: 
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
                 elif method == 'DEL':
                     try:
@@ -128,10 +131,12 @@ class key_value(Resource):
             broadcasted_counter = message.get('counter')
             counter = broadcasted_counter
             version = message.get('version')
+            versionDict[key] = version
             versionList.append(version)
-        else:
+        else: 
             counter += 1
             version = "V" + str(counter)
+            versionDict[key] = version
             versionList.append(version)
         if v:
             #need to convert it to this because of testing
