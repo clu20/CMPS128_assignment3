@@ -49,36 +49,97 @@ class key_value(Resource):
                 end_point = '/key-value-store/'
                 view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
+                json = None
                 try:
                     v = message.get('value')
                 except:
                     current_address = os.environ['SOCKET_ADDRESS']
                     return make_response(jsonify(error="error in try catch put()", current_address=current_address),400)
+
                 sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
                 global counter
                 meta = message.get('causal-metadata')
                 
                 # for some reason splitting "" breaks the code
                 if len(meta) > 1:
-                    meta = meta.split(', ')
+                    meta = meta.split(',')
                 # if there is no meta data list or the meta is the same as the list (received all messages)
                 if meta == "" or meta == versionList:
-                    response = self.doPut(key, sentFromClient, view_list, meta, message)
-                    return make_response(response)
+                    if not sentFromClient:
+                        broadcasted_counter = message.get('counter')
+                        counter = broadcasted_counter
+                        version = message.get('version')
+                        versionDict[key] = version
+                        versionList.append(version)
+                    else: 
+                        counter += 1
+                        version = "V" + str(counter)
+                        versionDict[key] = version
+                        versionList.append(version)
+                    if v:
+                    #need to convert it to this because of testing
+                        string_versionList = ','.join(versionList)
+                        if key in newdict:
+                       #edit value @ key, key
+                            newdict[key] = v
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                                json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
+                            else:
+                                json = jsonify({'message': 'Replicated successfully', 'version': version})
+                            return make_response(json, 200)
+                        else:
+                            #add new value @ key, key
+                            newdict[key] = v
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                                json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
+                            else:
+                                json = jsonify({'message': 'Replicated successfully', 'version': version})
+                            return make_response(json, 201)
+                    else:
+                        json = jsonify({'error':'Value is missing', 'message':'Error in PUT' })
+                        return make_response(json, 400)
                 else:
                     for i in meta:
                         if i not in versionList:
                             while i not in versionList:
-                                r = request.get_json()
-                                new_meta = r.get('causal-metadata')
-                                if new_meta == i:
-                                    self.doPut(key, sentFromClient, view_list, new_meta, r)
-                                    break
-                                else:
-                                    pass
-                    response = self.doPut(key, sentFromClient, view_list, meta, message)
-                    return make_response(response)
-                    
+                                pass
+                    if not sentFromClient:
+                        broadcasted_counter = message.get('counter')
+                        counter = broadcasted_counter
+                        version = message.get('version')
+                        versionDict[key] = version
+                        versionList.append(version)
+                    else: 
+                        counter += 1
+                        version = "V" + str(counter)
+                        versionDict[key] = version
+                        versionList.append(version)
+                    if v:
+                    #need to convert it to this because of testing
+                        string_versionList = ','.join(versionList)
+                        if key in newdict:
+                       #edit value @ key, key
+                            newdict[key] = v
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                                json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
+                            else:
+                                json = jsonify({'message': 'Replicated successfully', 'version': version})
+                            return make_response(json, 200)
+                        else:
+                            #add new value @ key, key
+                            newdict[key] = v
+                            if sentFromClient:
+                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                                json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
+                            else:
+                                json = jsonify({'message': 'Replicated successfully', 'version': version})
+                            return make_response(json, 201)
+                    else:
+                        json = jsonify({'error':'Value is missing', 'message':'Error in PUT' })
+                        return make_response(json, 400)
             else:
                 return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
 
@@ -240,4 +301,4 @@ api.add_resource(Views, '/key-value-store-view')
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=8080, threaded=True)
