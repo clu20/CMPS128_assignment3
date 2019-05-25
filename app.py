@@ -25,19 +25,24 @@ for ip in listedView:
             requests.put(replica, json = {'socket-address': socket})
         except:
             print("Error in contacting replica")
-'''
-##on new run, broadcast put(keys) to all other replicas in view...YET to work
+
+# on new run, broadcast put(keys) to all other replicas in view...YET to work
+## I think this is the right idea, but I am unsure which put method to use
+### (also unsure about what to put for meta and version)
+
 for ip in listedView:
     if ip != socket:
         for key in newdict:
             beginning = 'http://'
             end_point = '/key-value-store/'
-            replica = beginning+ip+end_point+key
+            replica = beginning+ip+end_point
             try:
-                requests.put(replica, json = {})
+                requests.put(replica, key, json={'value':mydict[key], 'causal-metadata':versionList[newdict[key]]})
+                #requests.doPUT(key, fromClient=False, view_list=listedView, meta=','.join(versionList), message=newdict[key])
+                #requests.broadcast_request(listedView, 'PUT' , key, newdict[key], version, meta=','.join(versionList), counter)
             except:
                 print('Error in updating keys')
-'''
+
 
 
 class key_value(Resource):
@@ -139,7 +144,7 @@ class key_value(Resource):
                 if method == "PUT":
                     try:
                         requests.put(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta, 'counter': counter})
-                    except: 
+                    except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
                 elif method == 'DEL':
                     try:
@@ -162,7 +167,7 @@ class key_value(Resource):
             version = message.get('version')
             versionDict[key] = version
             versionList.append(version)
-        else: 
+        else:
             counter += 1
             version = "V" + str(counter)
             versionDict[key] = version
