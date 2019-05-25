@@ -52,12 +52,14 @@ class view(Resource):
             else:
                 view = view + ',' + socket_add
                 #broadcast the new replica to be in other replica views
+                view_list = view.split(',')
                 for ip in view_list:
                     if ip != socket:
                         beginning = 'http://'
                         end_point = '/key-value-store-view'
                         replica = beginning+ip+end_point
                         requests.put(replica, json = {'socket-address': socket})
+
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
@@ -81,6 +83,7 @@ class view(Resource):
                 x+=1
             view = new_view
             #Broadcast the VIEW delete to all other socket-addresses
+            view_list = view.split(',')
             for ip in view_list:
                 if ip != socket:
                     beginning = 'http://'
@@ -143,13 +146,13 @@ class key_value(Resource):
                         if key in newdict:
                             #edit value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in view:
+                            if request.remote_addr not in os.environ['VIEW']:
                                 self.broadcast_request(view, "PUT", key, v, version, meta)
                             return make_response(jsonify(message='Updated successfully', version = version, meta = versionList),200)
                         else:
                             #add new value @ key, key
                             newdict[key] = v
-                            if request.remote_addr not in view:
+                            if request.remote_addr not in os.environ['VIEW']:
                                 self.broadcast_request(view, "PUT", key, v, version, meta)
                             return make_response(jsonify(message='Added successfully', version = version, meta = versionList), 201)
                     else:
@@ -187,7 +190,7 @@ class key_value(Resource):
                     version = "V" + str(counter)
                     versionList.append(version)
                     newdict[key] = None
-                    if request.remote_addr not in view:
+                    if request.remote_addr not in os.environ['VIEW']:
                         self.broadcast_request(view, "DELETE", key, version, meta)
                     return make_response(jsonify(message='Deleted successfully', version = version),200)
                 else:
