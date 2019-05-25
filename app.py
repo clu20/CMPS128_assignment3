@@ -5,13 +5,42 @@ import os, requests
 
 app = Flask(__name__)
 api = Api(app)
-forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
 versionList = []
 counter = 0
 
+forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
+#communicate with other replicas when initiated (when ran after downed)
+theView = os.environ.get('VIEW')
+socket = os.environ.get('SOCKET_ADDRESS')
+listedView = theView.split(',')
+##on new run, broadcast put(socket address) to all other replicas in view...WORKS
+for ip in listedView:
+    if ip != socket:
+        beginning = 'http://'
+        end_point = '/key-value-store-view'
+        replica = beginning+ip+end_point
+        try:
+            requests.put(replica, json = {'socket-address': socket})
+        except:
+            print("Error in contacting replica")
+'''
+##on new run, broadcast put(keys) to all other replicas in view...YET to work
+for ip in listedView:
+    if ip != socket:
+        for key in newdict:
+            beginning = 'http://'
+            end_point = '/key-value-store/'
+            replica = beginning+ip+end_point+key
+            try:
+                requests.put(replica, json = {})
+            except:
+                print('Error in updating keys')
+'''
+
+
 class key_value(Resource):
-    
+
     def __init__(self):
         self.counter = 0
 
@@ -54,7 +83,7 @@ class key_value(Resource):
                 sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
                 global counter
                 meta = message.get('causal-metadata')
-                
+
                 # for some reason splitting "" breaks the code
                 if len(meta) > 1:
                     meta = meta.split(', ')
@@ -75,7 +104,7 @@ class key_value(Resource):
                                     pass
                     response = self.doPut(key, sentFromClient, view_list, meta, message)
                     return make_response(response)
-                    
+
             else:
                 return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
 
@@ -144,7 +173,7 @@ class key_value(Resource):
                     json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
                 else:
                     json = jsonify({'message': 'Replicated successfully', 'version': version})
-                    
+
                 return json, 200
             else:
                             #add new value @ key, key
@@ -196,7 +225,7 @@ class Views(Resource):
                 return make_response(jsonify(message= 'Replica added successfully to the view'), 200)
         else:
             return make_response(jsonify(error='socket address is missing', message= 'Error in PUT'), 400)
-        
+
     def delete(self):
         view_list = os.environ['VIEW'].split(',')
         new_view = ''
