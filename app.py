@@ -50,44 +50,27 @@ class key_value(Resource):
                 sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
                 global counter
                 meta = message.get('causal-metadata')
-
+                
                 # for some reason splitting "" breaks the code
                 if len(meta) > 1:
                     meta = meta.split(', ')
-                # if there is no meta data list or the meta is already in the list
+                # if there is no meta data list or the meta is the same as the list (received all messages)
                 if meta == "" or meta == versionList:
-                #if not sent from client use the same version broadcasted to you and set the right counter.
-                #create version
-                    if not sentFromClient:
-                        broadcasted_counter = message.get('counter')
-                        counter = broadcasted_counter
-                        version = message.get('version')
-                        versionList.append(version)
-                    else:
-                        counter += 1
-                        version = "V" + str(counter)
-                        versionList.append(version)
-                    if v:
-                        if key in newdict:
-                            #edit value @ key, key
-                            newdict[key] = v
-                            if sentFromClient:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                            json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
-                            return make_response(json, 200)
-                        else:
-                            #add new value @ key, key
-                            newdict[key] = v
-                            if sentFromClient:
-                                self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                            json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
-
-                            return make_response(json, 201)
-                    else:
-                        return make_response(jsonify(error="Value is missing",message="Error in PUT"), 400)
+                    response = self.doPut(key, sentFromClient, view_list, meta, message)
+                    return make_response(response)
                 else:
-                    #just loop this shit but 
-                    return make_response(jsonify(error="did not do all the operations that are depended on"), 400)
+                    # return make_response("need to wait", 400)
+                    for i in meta:
+                        if i not in versionList:
+                            while i not in versionList:
+                                r = request.get_json()
+                                new_meta = r.get('causal-metadata')
+                                if new_meta == i:
+                                    self.doPut(key, sentFromClient, view_list, new_meta, r)
+                                else:
+                                    pass
+                    response = self.doPut(key, sentFromClient, view_list, meta, message)
+                    return make_response(response)
                     
             else:
                 return make_response(jsonify(error="Key is too long", message="Error in PUT"), 400)
@@ -127,6 +110,45 @@ class key_value(Resource):
                         requests.delete(rep_url, json={'value' : value, 'version': version, 'causal-metadata': meta, 'counter': counter})
                     except:
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
+
+
+    def doPut(self, key, fromClient, view_list, meta, message):
+        v = message.get('value')
+        json = None
+        global counter
+        if not fromClient:
+            broadcasted_counter = message.get('counter')
+            counter = broadcasted_counter
+            version = message.get('version')
+            versionList.append(version)
+        else:
+            counter += 1
+            version = "V" + str(counter)
+            versionList.append(version)
+        if v:
+            if key in newdict:
+                       #edit value @ key, key
+                newdict[key] = v
+                if fromClient:
+                    self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                    json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': versionList})
+                else:
+                    json = jsonify({'message': 'Replicated successfully', 'version': version})
+                    return make_response(json, 200)
+                return json, 200
+            else:
+                            #add new value @ key, key
+                newdict[key] = v
+                if fromClient:
+                    self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
+                    json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
+                else:
+                    json = jsonify({'message': 'Replicated successfully', 'version': version})
+                return json, 201
+        else:
+            json = jsonify({'error':'Value is missing', 'message':'Error in PUT' })
+            return json, 400
+
 
 
 
