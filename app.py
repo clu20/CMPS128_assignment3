@@ -180,53 +180,6 @@ class key_value(Resource):
                         requests.delete(beginning+current_address+'/key-value-store-view', json = {'socket-address': reps})
 
 
-    def doPut(self, key, fromClient, view_list, meta, message):
-        try:
-            v = message.get('value')
-        except:
-            current_address = os.environ['SOCKET_ADDRESS']
-            return make_response(jsonify(error='error in try catch on doPUT', replica = current_address), 400)
-        json = None
-        global counter
-        if not fromClient:
-            broadcasted_counter = message.get('counter')
-            counter = broadcasted_counter
-            version = message.get('version')
-            versionDict[key] = version
-            versionList.append(version)
-        else: 
-            counter += 1
-            version = "V" + str(counter)
-            versionDict[key] = version
-            versionList.append(version)
-        if v:
-            #need to convert it to this because of testing
-            string_versionList = ','.join(versionList)
-            if key in newdict:
-                       #edit value @ key, key
-                newdict[key] = v
-                if fromClient:
-                    self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                    json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
-                else:
-                    json = jsonify({'message': 'Replicated successfully', 'version': version})
-                    
-                return json, 200
-            else:
-                            #add new value @ key, key
-                newdict[key] = v
-                if fromClient:
-                    self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                    json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
-                else:
-                    json = jsonify({'message': 'Replicated successfully', 'version': version})
-                return json, 201
-        else:
-            json = jsonify({'error':'Value is missing', 'message':'Error in PUT' })
-            return json, 400
-
-
-
 
 class Views(Resource):
 
