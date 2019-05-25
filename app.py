@@ -46,7 +46,11 @@ class key_value(Resource):
                 end_point = '/key-value-store/'
                 view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
-                v = message.get('value')
+                try:
+                    v = message.get('value')
+                except:
+                    current_address = os.environ['SOCKET_ADDRESS']
+                    return make_response(jsonify(error="error in try catch put()", current_address=current_address),400)
                 sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
                 global counter
                 meta = message.get('causal-metadata')
@@ -59,7 +63,6 @@ class key_value(Resource):
                     response = self.doPut(key, sentFromClient, view_list, meta, message)
                     return make_response(response)
                 else:
-                    # return make_response("need to wait", 400)
                     for i in meta:
                         if i not in versionList:
                             while i not in versionList:
@@ -67,6 +70,7 @@ class key_value(Resource):
                                 new_meta = r.get('causal-metadata')
                                 if new_meta == i:
                                     self.doPut(key, sentFromClient, view_list, new_meta, r)
+                                    break
                                 else:
                                     pass
                     response = self.doPut(key, sentFromClient, view_list, meta, message)
@@ -113,7 +117,11 @@ class key_value(Resource):
 
 
     def doPut(self, key, fromClient, view_list, meta, message):
-        v = message.get('value')
+        try:
+            v = message.get('value')
+        except:
+            current_address = os.environ['SOCKET_ADDRESS']
+            return make_response(jsonify(error='error in try catch on doPUT', replica = current_address), 400)
         json = None
         global counter
         if not fromClient:
@@ -126,22 +134,24 @@ class key_value(Resource):
             version = "V" + str(counter)
             versionList.append(version)
         if v:
+            #need to convert it to this because of testing
+            string_versionList = ','.join(versionList)
             if key in newdict:
                        #edit value @ key, key
                 newdict[key] = v
                 if fromClient:
                     self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                    json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': versionList})
+                    json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
                 else:
                     json = jsonify({'message': 'Replicated successfully', 'version': version})
-                    return make_response(json, 200)
+                    
                 return json, 200
             else:
                             #add new value @ key, key
                 newdict[key] = v
                 if fromClient:
                     self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
-                    json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': versionList})
+                    json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
                 else:
                     json = jsonify({'message': 'Replicated successfully', 'version': version})
                 return json, 201
