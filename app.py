@@ -12,7 +12,6 @@ versionDict = {}
 crashed_replicas = []
 counter = 0
 
-
 class key_value(Resource):
     
 
@@ -29,12 +28,11 @@ class key_value(Resource):
             #most recent info
             current_address = os.environ['SOCKET_ADDRESS']
             print('Current socket-address:{}'.format(current_address))
-            if current_address in crashed_replicas:
-                url = 'http://'+current_address+'/key-value-store-view'
-                try:
-                    requests.get(url)
-                except:
-                    print('failed GET in value store GET()')
+            url = 'http://'+current_address+'/key-value-store-view'
+            try:
+                requests.get(url)
+            except:
+                print('failed GET in value store GET()')
             if key in newdict:
                 #on key value found return found value
                 value = newdict[key]
@@ -69,12 +67,7 @@ class key_value(Resource):
                 view_list = os.environ['VIEW'].split(',')
                 message = request.get_json()
                 json = None
-                try:
-                    v = message.get('value')
-                except:
-                    current_address = os.environ['SOCKET_ADDRESS']
-                    return make_response(jsonify(error="error in try catch put()", current_address=current_address),400)
-
+                v = message.get('value')
                 sentFromClient = True if request.remote_addr not in os.environ['VIEW'] else False
                 global counter
                 meta = message.get('causal-metadata')
@@ -229,6 +222,7 @@ class Views(Resource):
                 try:
                     response = requests.get(url)
                 except:
+                    crashed_replicas.append(rep)
                     print("theres an error! ip:{}".format(url), file=sys.stderr)
                 if response != None:
                     data = response.json()
@@ -239,13 +233,39 @@ class Views(Resource):
                         newdict = data[2]
                         counter = data[3]
                         crashed_replicas = data[4]
-            #causes an infinite loop
-            # if current_address in crashed_replicas:
-            #     requests.put(beginning+rep+'/key-value-store-view', json={'socket-address': current_address})
-                        
 
+                    
     def get(self):
+        beginning = 'http://'
+        end_point = '/key-value-store-view'
+        global crashed_replicas
+        sentFromClient = True if request.remote_addr == '10.10.0.1' else False
+        response_json = None
+        if sentFromClient:
+            for rep in crashed_replicas:
+                try:
+                    response = requests.get(beginning+rep+end_point)
+                    response_json = response.json()
+                    print('response from trying to reach crashed replica:{} is {}'.format(rep, response_json), file=sys.stderr)            
+                except:
+                    print('tried to ping to dead replica{} but failed'.format(rep), file=sys.stderr)
+
+                if response_json != None:        
+                    view_list = os.environ['VIEW'].split(',')
+                    new_view = os.environ['VIEW']
+                    if rep not in view_list:
+                        print('--------rep is not in view list---------\n',file=sys.stderr)
+                        new_view = os.environ['VIEW'] + ',' + rep
+                    print('new_view:{}'.format(new_view), file=sys.stderr)
+                    for v in view_list:
+                        requests.put(beginning+v+'/version-data', json = {'views': new_view})
+                    requests.put(beginning+rep+'/version-data', json={'views': new_view})
+                    crashed_replicas.remove(rep)
+
         return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
+
+
+        
 
     def put(self):
         view_list = os.environ['VIEW'].split(',')
@@ -288,7 +308,8 @@ class Views(Resource):
         if socket_add in view_list:
             #Remove socket-address if in VIEW
             view_list.remove(socket_add)
-            crashed_replicas.append(socket_add)
+            if socket_add not in crashed_replicas:
+                crashed_replicas.append(socket_add)
             list_length = len(view_list)
             x = 0
             #Create new VIEW string for environment var 'VIEW'
@@ -321,6 +342,11 @@ class VersionData(Resource):
             return None
         else:
             return jsonify(versionList, versionDict, newdict, counter, crashed_replicas)
+
+    def put(self):
+        json = request.get_json()
+        views = json.get('views')
+        os.environ['VIEW'] = views
 
 
 
