@@ -57,12 +57,12 @@ class key_value(Resource):
             print('-----inside put------ip={}'.format(os.environ['SOCKET_ADDRESS']), file=sys.stderr)
             current_address = os.environ['SOCKET_ADDRESS']
             print('Current socket-address:{}'.format(current_address), file=sys.stderr)
-            if current_address in crashed_replicas:
-                url = 'http://'+current_address+'/key-value-store-view'
-                try:
-                    requests.get(url)
-                except:
-                    print('failed GET in value store GET()', file=sys.stderr)
+            #try to initialize the restarted replica before doing put operations so it has the up to date versionlist
+            url = 'http://'+current_address+'/key-value-store-view'
+            try:
+                requests.get(url)
+            except:
+                print('failed GET in value store GET()', file=sys.stderr)
             if len(key) < 50:
                 beginning = 'http://'
                 end_point = '/key-value-store/'
@@ -85,13 +85,17 @@ class key_value(Resource):
                 # if there is no meta data list or the meta is the same as the list (received all messages)
                 if meta == "" or meta == versionList:
                     print('----------valid meta case-----', file=sys.stderr)
-                    if not sentFromClient:
+                    #if it is sent from another replica
+                    print('request.remote_addr:{}'.format(request.remote_addr), file=sys.stderr)
+                    if request.remote_addr != '10.10.0.1':
                         broadcasted_counter = message.get('counter')
                         counter = broadcasted_counter
                         version = message.get('version')
                         versionDict[key] = version
-                        versionList.append(version)
-                    else: 
+                        if version not in versionList:
+                            versionList.append(version)
+                    else: #if request is sent from client,  make your own version and append it
+                        print('creating a new version!\n', file=sys.stderr)
                         counter += 1
                         version = "V" + str(counter)
                         versionDict[key] = version
@@ -102,7 +106,8 @@ class key_value(Resource):
                         if key in newdict:
                        #edit value @ key, key
                             newdict[key] = v
-                            if sentFromClient:
+                            if request.remote_addr == '10.10.0.1':
+                                print('about to broadcast to other replicas', file=sys.stderr)
                                 self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
                                 json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
                             else:
@@ -111,7 +116,7 @@ class key_value(Resource):
                         else:
                             #add new value @ key, key
                             newdict[key] = v
-                            if sentFromClient:
+                            if request.remote_addr == '10.10.0.1':
                                 self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
                                 json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
                             else:
@@ -126,12 +131,13 @@ class key_value(Resource):
                         if i not in versionList:
                             while i not in versionList:
                                 pass
-                    if not sentFromClient:
+                    if request.remote_addr != '10.10.0.1':
                         broadcasted_counter = message.get('counter')
                         counter = broadcasted_counter
                         version = message.get('version')
                         versionDict[key] = version
-                        versionList.append(version)
+                        if version not in versionList:
+                            versionList.append(version)
                     else: 
                         counter += 1
                         version = "V" + str(counter)
@@ -143,7 +149,7 @@ class key_value(Resource):
                         if key in newdict:
                        #edit value @ key, key
                             newdict[key] = v
-                            if sentFromClient:
+                            if request.remote_addr == '10.10.0.1':
                                 self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
                                 json = jsonify({'message': 'Updated successfully', 'version': version, 'causal-metadata': string_versionList})
                             else:
@@ -152,7 +158,7 @@ class key_value(Resource):
                         else:
                             #add new value @ key, key
                             newdict[key] = v
-                            if sentFromClient:
+                            if request.remote_addr == '10.10.0.1':
                                 self.broadcast_request(view_list, "PUT", key, v, version, meta, counter)
                                 json = jsonify({'message': 'Added successfully', 'version': version, 'causal-metadata': string_versionList})
                             else:
@@ -217,7 +223,7 @@ class Views(Resource):
         global counter
         global newdict
         for rep in view_list:
-            print(crashed_replicas, file=sys.stderr)
+            # print(crashed_replicas, file=sys.stderr)
             if current_address != rep and rep not in crashed_replicas:
                 url = beginning+rep+end_point
                 try:
@@ -233,6 +239,7 @@ class Views(Resource):
                         newdict = data[2]
                         counter = data[3]
                         crashed_replicas = data[4]
+            #causes an infinite loop
             # if current_address in crashed_replicas:
             #     requests.put(beginning+rep+'/key-value-store-view', json={'socket-address': current_address})
                         
