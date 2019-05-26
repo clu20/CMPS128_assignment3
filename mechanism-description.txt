@@ -1,0 +1,6 @@
+To detect dead replicas we used a try, except for PUT and DELETE view operations to see if the replicas respond back or not.
+
+Causal consistency:
+We implemented the causal consistency list like the pdf described. Each replica that receives a request from client will check its' 
+consistency list, which we called our "versionList" for the operation. If all the meta data is there, we execute the operation 
+and broadcast to the other replicas. If not we wait until the dependent operation arrives.
