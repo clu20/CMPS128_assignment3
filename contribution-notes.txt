@@ -1,10 +1,9 @@
 clu20:
 
-Created the View operations for PUT,GET,DELETE. Worked on implementing the waiting case where a replica did not receive all of its dependent operations.
+Created the View operations for PUT,GET,DELETE. Worked on implementing the waiting case where a replica did not receive all of its dependent operations. Worked on debugging the last 2 test cases.
 
 wyu19:
-Implemented the causal history list and the waiting case.(does not work entirely though). Worked on debugging the last 2 failed 
-test cases.
+Implemented the causal history list and the waiting case.(does not work entirely though). Worked on debugging the last 2 failed test cases.
 
 tvhunter:
 Worked on delete causal implementation, waiting case. Worked on debugging the last 2 failed test cases.
