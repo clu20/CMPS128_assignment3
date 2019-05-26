@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, make_response, g
 from flask_restful import Api, Resource
-
+import sys
 import os, requests
 
 app = Flask(__name__)
@@ -9,12 +9,12 @@ forwarding = os.environ.get('FORWARDING_ADDRESS') or 0 ## forwarding ip
 newdict = {}
 versionList = []
 versionDict = {}
+crashed_replicas = []
 counter = 0
+
 
 class key_value(Resource):
     
-    def __init__(self):
-        self.counter = 0
 
     def get(self, key):
         if 'FORWARDING_ADDRESS' in os.environ:
@@ -25,6 +25,16 @@ class key_value(Resource):
             except:
                 return make_response(jsonify(error= 'Main instance is down', message = 'Error in GET'), 503)
         else:
+            #if a dead replica calls for a key value, this if, try, except code will initialize the view so it gets the
+            #most recent info
+            current_address = os.environ['SOCKET_ADDRESS']
+            print('Current socket-address:{}'.format(current_address))
+            if current_address in crashed_replicas:
+                url = 'http://'+current_address+'/key-value-store-view'
+                try:
+                    requests.get(url)
+                except:
+                    print('failed GET in value store GET()')
             if key in newdict:
                 #on key value found return found value
                 value = newdict[key]
@@ -44,6 +54,15 @@ class key_value(Resource):
             except:
                 return make_response(jsonify(error = 'Main instance is down', message="Error in PUT"), 503)
         else:
+            print('-----inside put------ip={}'.format(os.environ['SOCKET_ADDRESS']), file=sys.stderr)
+            current_address = os.environ['SOCKET_ADDRESS']
+            print('Current socket-address:{}'.format(current_address), file=sys.stderr)
+            if current_address in crashed_replicas:
+                url = 'http://'+current_address+'/key-value-store-view'
+                try:
+                    requests.get(url)
+                except:
+                    print('failed GET in value store GET()', file=sys.stderr)
             if len(key) < 50:
                 beginning = 'http://'
                 end_point = '/key-value-store/'
@@ -65,6 +84,7 @@ class key_value(Resource):
                     meta = meta.split(',')
                 # if there is no meta data list or the meta is the same as the list (received all messages)
                 if meta == "" or meta == versionList:
+                    print('----------valid meta case-----', file=sys.stderr)
                     if not sentFromClient:
                         broadcasted_counter = message.get('counter')
                         counter = broadcasted_counter
@@ -101,6 +121,7 @@ class key_value(Resource):
                         json = jsonify({'error':'Value is missing', 'message':'Error in PUT' })
                         return make_response(json, 400)
                 else:
+                    print('-----------in wait case-------\n', file=sys.stderr)
                     for i in meta:
                         if i not in versionList:
                             while i not in versionList:
@@ -152,6 +173,7 @@ class key_value(Resource):
             except:
                 return make_response(jsonify(error='Main instance is down', message='Error in DELETE'),503)
         else:
+
             if newdict.pop(key,None) == None:
                 return make_response(jsonify(doesExist=False, error="Key does not exist", message="Error in DELETE"), 404)
             else:
@@ -182,7 +204,38 @@ class key_value(Resource):
 
 
 class Views(Resource):
-
+    #how would i differentiate a replica that just starting up vs a replica that restarted
+    def __init__(self):
+        beginning = 'http://'
+        end_point = '/version-data'
+        current_address = os.environ['SOCKET_ADDRESS']
+        view_list = os.environ['VIEW'].split(',')
+        response = None
+        global crashed_replicas
+        global versionList
+        global versionDict
+        global counter
+        global newdict
+        for rep in view_list:
+            print(crashed_replicas, file=sys.stderr)
+            if current_address != rep and rep not in crashed_replicas:
+                url = beginning+rep+end_point
+                try:
+                    response = requests.get(url)
+                except:
+                    print("theres an error! ip:{}".format(url), file=sys.stderr)
+                if response != None:
+                    data = response.json()
+                    if data != None:
+                        print(data, file=sys.stderr)
+                        versionList = data[0]
+                        versionDict = data[1]
+                        newdict = data[2]
+                        counter = data[3]
+                        crashed_replicas = data[4]
+            # if current_address in crashed_replicas:
+            #     requests.put(beginning+rep+'/key-value-store-view', json={'socket-address': current_address})
+                        
 
     def get(self):
         return make_response(jsonify(message='View retrieved successfully', view = os.environ['VIEW']))
@@ -195,6 +248,10 @@ class Views(Resource):
             if socket_add in view_list:
                 return make_response(jsonify(error='Socket address already exists in the view', message= 'Error in PUT'), 404)
             else:
+                if socket_add in crashed_replicas:
+                    for i in crashed_replicas:
+                        if i == socket_add:
+                            crashed_replicas.remove(socket_add)
                 new_view = os.environ['VIEW'] + ',' + socket_add
                 os.environ['VIEW'] = new_view
                 beginning = 'http://'
@@ -224,6 +281,7 @@ class Views(Resource):
         if socket_add in view_list:
             #Remove socket-address if in VIEW
             view_list.remove(socket_add)
+            crashed_replicas.append(socket_add)
             list_length = len(view_list)
             x = 0
             #Create new VIEW string for environment var 'VIEW'
@@ -249,8 +307,19 @@ class Views(Resource):
             return make_response(jsonify(error='Socket address does not exist in the view', message= 'Error in DELETE'), 404)
 
 
+class VersionData(Resource):
+
+    def get(self):
+        if versionList == []:
+            return None
+        else:
+            return jsonify(versionList, versionDict, newdict, counter, crashed_replicas)
+
+
+
 api.add_resource(key_value, '/key-value-store/', '/key-value-store/<key>')
 api.add_resource(Views, '/key-value-store-view')
+api.add_resource(VersionData, '/version-data')
 
 
 if __name__ == '__main__':
