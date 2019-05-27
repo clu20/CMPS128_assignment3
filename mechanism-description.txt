@@ -1,4 +1,15 @@
-To detect dead replicas we used a try, except for PUT and DELETE view operations to see if the replicas respond back or not.
+Dead Replicas: 
+For dead replicas, when we detect a replica is down we add it to the list of of crashed replicas. Whenever we
+do a put on that replica we try to see if that replica is up with a try except and if it is it will be initialized and will 
+send a get request to the /version-data endpoint which will then send back the versionlist, dictionary, version dictionary, 
+etc to the restarted replica. That way the replica will have the same data as the others. When another replica receives a get 
+request it will check if other replicas are down by pinging every replica's /key-store-value-view in the down list. If it 
+responds back then without an issue then we will populate the each replica's view to include the restarted replica. Also, we 
+would remove the replica in the crashed_replica list.
 
 Causal consistency:
-We implemented the causal consistency list like the pdf described. Each replica that receives a request from client will check its' consistency list, which we called our "versionList" for the operation. If all the meta data is there, we execute the operation and broadcast to the other replicas. If not, we wait until the dependent operation arrives. We implemented the waiting with while loop that will terminate once the dependent versions arrive.
+We implemented the causal consistency list like the pdf described. Each replica that receives a request from client will check
+its' consistency list, which we called our "versionList" for the operation. If all the meta data is there, we execute the 
+operation and broadcast to the other replicas. If not, we wait until the dependent operation arrives. We implemented the 
+waiting with while loop that will terminate once the dependent versions arrive.
+ 
